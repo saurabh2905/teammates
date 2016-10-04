@@ -19,10 +19,6 @@ import teammates.common.util.Utils;
 @SuppressWarnings("serial")
 public class BackDoorServlet extends HttpServlet {
     
-    /*
-     * This class is tested by the BackDoorTest class.
-     */
-
     public static final String OPERATION_DELETE_INSTRUCTOR = "OPERATION_DELETE_INSTRUCTOR";
     public static final String OPERATION_DELETE_COURSE = "OPERATION_DELETE_COURSE";
     public static final String OPERATION_DELETE_ACCOUNT = "OPERATION_DELETE_ACCOUNT";
