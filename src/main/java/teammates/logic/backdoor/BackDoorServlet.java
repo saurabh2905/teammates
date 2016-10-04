@@ -19,40 +19,38 @@ import teammates.common.util.Utils;
 @SuppressWarnings("serial")
 public class BackDoorServlet extends HttpServlet {
     
-    public static final String OPERATION_DELETE_INSTRUCTOR = "OPERATION_DELETE_INSTRUCTOR";
-    public static final String OPERATION_DELETE_COURSE = "OPERATION_DELETE_COURSE";
-    public static final String OPERATION_DELETE_ACCOUNT = "OPERATION_DELETE_ACCOUNT";
-    public static final String OPERATION_DELETE_STUDENT = "OPERATION_DELETE_STUDENT";
-    public static final String OPERATION_DELETE_FEEDBACK_SESSION = "OPERATION_DELETE_FEEDBACK_SESSION";
-    public static final String OPERATION_DELETE_FEEDBACK_QUESTION = "OPERATION_DELETE_FEEDBACK_QUESTION";
-    public static final String OPERATION_DELETE_FEEDBACK_RESPONSE = "OPERATION_DELETE_FEEDBACK_RESPONSE";
-    public static final String OPERATION_EDIT_FEEDBACK_SESSION = "OPERATION_EDIT_FEEDBACK_SESSION";
-    public static final String OPERATION_EDIT_FEEDBACK_QUESTION = "OPERATION_EDIT_FEEDBACK_QUESTION";
-    public static final String OPERATION_EDIT_STUDENT = "OPERATION_EDIT_STUDENT";
-    public static final String OPERATION_EDIT_STUDENT_PROFILE_PICTURE = "OPERATION_EDIT_STUDENT_PROFILE_PICTURE";
-    public static final String OPERATION_GET_INSTRUCTOR_AS_JSON_BY_ID = "OPERATION_GET_INSTRUCTOR_AS_JSON_BY_ID";
-    public static final String OPERATION_GET_INSTRUCTOR_AS_JSON_BY_EMAIL = "OPERATION_GET_INSTRUCTOR_AS_JSON_BY_EMAIL";
-    public static final String OPERATION_GET_ACCOUNT_AS_JSON = "OPERATION_GET_ACCOUNT_AS_JSON";
-    public static final String OPERATION_GET_STUDENTPROFILE_AS_JSON = "OPERATION_GET_STUDENTPROFILE_AS_JSON";
-    public static final String OPERATION_GET_COURSE_AS_JSON = "OPERATION_GET_COURSE_AS_JSON";
-    public static final String OPERATION_GET_STUDENT_AS_JSON = "OPERATION_GET_STUDENT_AS_JSON";
-    public static final String OPERATION_GET_ENCRYPTED_KEY_FOR_INSTRUCTOR = "OPERATION_GET_ENCRYPTED_KEY_FOR_INSTRUCTOR";
-    public static final String OPERATION_GET_ENCRYPTED_KEY_FOR_STUDENT = "OPERATION_GET_ENCRYPTED_KEY_FOR_STUDENT";
-    public static final String OPERATION_GET_FEEDBACK_SESSION_AS_JSON = "OPERATION_GET_FEEDBACK_SESSION_AS_JSON";
-    public static final String OPERATION_GET_FEEDBACK_RESPONSES_FOR_RECEIVER_AS_JSON =
-            "OPERATION_GET_FEEDBACK_RESPONSES_FOR_RECEIVER_AS_JSON";
-    public static final String OPERATION_GET_FEEDBACK_RESPONSES_FOR_GIVER_AS_JSON =
-            "OPERATION_GET_FEEDBACK_RESPONSES_FOR_GIVER_AS_JSON";
-    public static final String OPERATION_GET_FEEDBACK_QUESTION_AS_JSON = "OPERATION_GET_FEEDBACK_QUESTION_AS_JSON";
-    public static final String OPERATION_GET_FEEDBACK_QUESTION_FOR_ID_AS_JSON =
-            "OPERATION_GET_FEEDBACK_QUESTION_FOR_ID_AS_JSON";
-    public static final String OPERATION_GET_FEEDBACK_RESPONSE_AS_JSON = "OPERATION_GET_FEEDBACK_RESPONSE_AS_JSON";
-    public static final String OPERATION_IS_PICTURE_PRESENT_IN_GCS = "OPERATION_IS_PICTURE_PRESENT_IN_GCS";
-    
-    public static final String OPERATION_PERSIST_DATABUNDLE = "OPERATION_PERSIST_DATABUNDLE";
-    public static final String OPERATION_REMOVE_DATABUNDLE = "OPERATION_REMOVE_DATABUNDLE";
-    public static final String OPERATION_REMOVE_AND_RESTORE_DATABUNDLE = "OPERATION_REMOVE_AND_RESTORE_DATABUNDLE";
-    public static final String OPERATION_PUT_DOCUMENTS = "OPERATION_PUT_DOCUMENTS";
+    public enum BackDoorOperationCode {
+        OPERATION_DELETE_ACCOUNT,
+        OPERATION_DELETE_COURSE,
+        OPERATION_DELETE_FEEDBACK_QUESTION,
+        OPERATION_DELETE_FEEDBACK_RESPONSE,
+        OPERATION_DELETE_FEEDBACK_SESSION,
+        OPERATION_DELETE_INSTRUCTOR,
+        OPERATION_DELETE_STUDENT,
+        OPERATION_EDIT_FEEDBACK_QUESTION,
+        OPERATION_EDIT_FEEDBACK_SESSION,
+        OPERATION_EDIT_STUDENT,
+        OPERATION_EDIT_STUDENT_PROFILE_PICTURE,
+        OPERATION_GET_ACCOUNT_AS_JSON,
+        OPERATION_GET_COURSE_AS_JSON,
+        OPERATION_GET_ENCRYPTED_KEY_FOR_INSTRUCTOR,
+        OPERATION_GET_ENCRYPTED_KEY_FOR_STUDENT,
+        OPERATION_GET_FEEDBACK_QUESTION_AS_JSON,
+        OPERATION_GET_FEEDBACK_QUESTION_FOR_ID_AS_JSON,
+        OPERATION_GET_FEEDBACK_RESPONSE_AS_JSON,
+        OPERATION_GET_FEEDBACK_RESPONSES_FOR_GIVER_AS_JSON,
+        OPERATION_GET_FEEDBACK_RESPONSES_FOR_RECEIVER_AS_JSON,
+        OPERATION_GET_FEEDBACK_SESSION_AS_JSON,
+        OPERATION_GET_INSTRUCTOR_AS_JSON_BY_ID,
+        OPERATION_GET_INSTRUCTOR_AS_JSON_BY_EMAIL,
+        OPERATION_GET_STUDENT_AS_JSON,
+        OPERATION_GET_STUDENTPROFILE_AS_JSON,
+        OPERATION_IS_PICTURE_PRESENT_IN_GCS,
+        OPERATION_PERSIST_DATABUNDLE,
+        OPERATION_PUT_DOCUMENTS,
+        OPERATION_REMOVE_AND_RESTORE_DATABUNDLE,
+        OPERATION_REMOVE_DATABUNDLE
+    }
     
     public static final String PARAMETER_BACKDOOR_KEY = "PARAMETER_BACKDOOR_KEY";
     public static final String PARAMETER_BACKDOOR_OPERATION = "PARAMETER_BACKDOOR_OPERATION";
@@ -83,6 +81,7 @@ public class BackDoorServlet extends HttpServlet {
 
         String action = req.getParameter(PARAMETER_BACKDOOR_OPERATION);
         log.info(action);
+        BackDoorOperationCode opCode = BackDoorOperationCode.valueOf(action);
 
         String returnValue;
 
@@ -93,7 +92,7 @@ public class BackDoorServlet extends HttpServlet {
         boolean isAuthorized = keyReceived.equals(Config.BACKDOOR_KEY);
         if (isAuthorized) {
             try {
-                returnValue = executeBackendAction(req, action);
+                returnValue = executeBackEndAction(req, opCode);
             } catch (Exception e) {
                 log.info(e.getMessage());
                 returnValue = Const.StatusCodes.BACKDOOR_STATUS_FAILURE
@@ -110,136 +109,143 @@ public class BackDoorServlet extends HttpServlet {
         resp.flushBuffer();
     }
 
-    private String executeBackendAction(HttpServletRequest req, String action)
-            throws EntityDoesNotExistException, InvalidParametersException, IOException {
-        // TODO: reorder in alphabetical order
+    @SuppressWarnings("PMD.SwitchStmtsShouldHaveDefault") // no default so that each case is accounted for
+    private String executeBackEndAction(HttpServletRequest req, BackDoorOperationCode opCode)
+            throws IOException, InvalidParametersException, EntityDoesNotExistException {
         BackDoorLogic backDoorLogic = new BackDoorLogic();
-        if (action.equals(OPERATION_DELETE_INSTRUCTOR)) {
-            String instructorEmail = req.getParameter(PARAMETER_INSTRUCTOR_EMAIL);
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            backDoorLogic.deleteInstructor(courseId, instructorEmail);
-        } else if (action.equals(OPERATION_DELETE_ACCOUNT)) {
+        switch (opCode) {
+        case OPERATION_DELETE_ACCOUNT:
             String googleId = req.getParameter(PARAMETER_GOOGLE_ID);
             backDoorLogic.deleteAccount(googleId);
-        } else if (action.equals(OPERATION_DELETE_COURSE)) {
+            break;
+        case OPERATION_DELETE_COURSE:
             String courseId = req.getParameter(PARAMETER_COURSE_ID);
             backDoorLogic.deleteCourse(courseId);
-        } else if (action.equals(OPERATION_DELETE_STUDENT)) {
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            String email = req.getParameter(PARAMETER_STUDENT_EMAIL);
-            backDoorLogic.deleteStudent(courseId, email);
-        } else if (action.equals(OPERATION_GET_ACCOUNT_AS_JSON)) {
-            String googleId = req.getParameter(PARAMETER_GOOGLE_ID);
-            return backDoorLogic.getAccountAsJson(googleId);
-        } else if (action.equals(OPERATION_GET_STUDENTPROFILE_AS_JSON)) {
-            String googleId = req.getParameter(PARAMETER_GOOGLE_ID);
-            return backDoorLogic.getStudentProfileAsJson(googleId);
-        } else if (action.equals(OPERATION_IS_PICTURE_PRESENT_IN_GCS)) {
-            String pictureKey = req.getParameter(PARAMETER_PICTURE_KEY);
-            return String.valueOf(backDoorLogic.isPicturePresentInGcs(pictureKey));
-        } else if (action.equals(OPERATION_GET_INSTRUCTOR_AS_JSON_BY_ID)) {
-            String instructorId = req.getParameter(PARAMETER_INSTRUCTOR_ID);
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            return backDoorLogic.getInstructorAsJsonById(instructorId, courseId);
-        } else if (action.equals(OPERATION_GET_INSTRUCTOR_AS_JSON_BY_EMAIL)) {
-            String instructorEmail = req.getParameter(PARAMETER_INSTRUCTOR_EMAIL);
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            return backDoorLogic.getInstructorAsJsonByEmail(instructorEmail, courseId);
-        } else if (action.equals(OPERATION_GET_COURSE_AS_JSON)) {
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            return backDoorLogic.getCourseAsJson(courseId);
-        } else if (action.equals(OPERATION_GET_STUDENT_AS_JSON)) {
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            String email = req.getParameter(PARAMETER_STUDENT_EMAIL);
-            return backDoorLogic.getStudentAsJson(courseId, email);
-        } else if (action.equals(OPERATION_GET_ENCRYPTED_KEY_FOR_INSTRUCTOR)) {
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            String email = req.getParameter(PARAMETER_INSTRUCTOR_EMAIL);
-            return backDoorLogic.getEncryptedKeyForInstructor(courseId, email);
-        } else if (action.equals(OPERATION_GET_ENCRYPTED_KEY_FOR_STUDENT)) {
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            String email = req.getParameter(PARAMETER_STUDENT_EMAIL);
-            return backDoorLogic.getEncryptedKeyForStudent(courseId, email);
-        } else if (action.equals(OPERATION_PERSIST_DATABUNDLE)) {
-            String dataBundleJsonString = req
-                    .getParameter(PARAMETER_DATABUNDLE_JSON);
-            DataBundle dataBundle = Utils.getTeammatesGson().fromJson(
-                    dataBundleJsonString, DataBundle.class);
-            backDoorLogic.persistDataBundle(dataBundle);
-        } else if (action.equals(OPERATION_REMOVE_DATABUNDLE)) {
-            String dataBundleJsonString = req
-                    .getParameter(PARAMETER_DATABUNDLE_JSON);
-            DataBundle dataBundle = Utils.getTeammatesGson().fromJson(
-                    dataBundleJsonString, DataBundle.class);
-            backDoorLogic.removeDataBundle(dataBundle);
-        } else if (action.equals(OPERATION_REMOVE_AND_RESTORE_DATABUNDLE)) {
-            String dataBundleJsonString = req
-                    .getParameter(PARAMETER_DATABUNDLE_JSON);
-            DataBundle dataBundle = Utils.getTeammatesGson().fromJson(
-                    dataBundleJsonString, DataBundle.class);
-            backDoorLogic.removeDataBundle(dataBundle);
-            backDoorLogic.persistDataBundle(dataBundle);
-        } else if (action.equals(OPERATION_PUT_DOCUMENTS)) {
-            String dataBundleJsonString = req
-                    .getParameter(PARAMETER_DATABUNDLE_JSON);
-            DataBundle dataBundle = Utils.getTeammatesGson().fromJson(
-                    dataBundleJsonString, DataBundle.class);
-            backDoorLogic.putDocuments(dataBundle);
-        } else if (action.equals(OPERATION_EDIT_FEEDBACK_SESSION)) {
-            String newValues = req.getParameter(PARAMETER_JSON_STRING);
-            backDoorLogic.editFeedbackSessionAsJson(newValues);
-        } else if (action.equals(OPERATION_EDIT_FEEDBACK_QUESTION)) {
-            String newValues = req.getParameter(PARAMETER_JSON_STRING);
-            backDoorLogic.editFeedbackQuestionAsJson(newValues);
-        } else if (action.equals(OPERATION_EDIT_STUDENT)) {
-            String originalEmail = req.getParameter(PARAMETER_STUDENT_EMAIL);
-            String newValues = req.getParameter(PARAMETER_JSON_STRING);
-            backDoorLogic.editStudentAsJson(originalEmail, newValues);
-        } else if (action.equals(OPERATION_EDIT_STUDENT_PROFILE_PICTURE)) {
-            String picture = req.getParameter(PARAMETER_PICTURE_DATA);
-            byte[] pictureData = Utils.getTeammatesGson().fromJson(picture, byte[].class);
-            String googleId = req.getParameter(PARAMETER_GOOGLE_ID);
-            backDoorLogic.uploadAndUpdateStudentProfilePicture(googleId, pictureData);
-        } else if (action.equals(OPERATION_DELETE_FEEDBACK_SESSION)) {
-            String feedbackSessionName = req.getParameter(PARAMETER_FEEDBACK_SESSION_NAME);
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            backDoorLogic.deleteFeedbackSession(feedbackSessionName, courseId);
-        } else if (action.equals(OPERATION_GET_FEEDBACK_SESSION_AS_JSON)) {
-            String feedbackSessionName = req.getParameter(PARAMETER_FEEDBACK_SESSION_NAME);
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            return backDoorLogic.getFeedbackSessionAsJson(feedbackSessionName, courseId);
-        } else if (action.equals(OPERATION_GET_FEEDBACK_RESPONSES_FOR_GIVER_AS_JSON)) {
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            String giverEmail = req.getParameter(PARAMETER_GIVER_EMAIL);
-            return backDoorLogic.getFeedbackResponsesForGiverAsJson(courseId, giverEmail);
-        } else if (action.equals(OPERATION_GET_FEEDBACK_RESPONSES_FOR_RECEIVER_AS_JSON)) {
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            String recipient = req.getParameter(PARAMETER_RECIPIENT);
-            return backDoorLogic.getFeedbackResponsesForReceiverAsJson(courseId, recipient);
-        } else if (action.equals(OPERATION_GET_FEEDBACK_QUESTION_AS_JSON)) {
-            String feedbackSessionName = req.getParameter(PARAMETER_FEEDBACK_SESSION_NAME);
-            String courseId = req.getParameter(PARAMETER_COURSE_ID);
-            int qnNumber = Integer.parseInt(req.getParameter(PARAMETER_FEEDBACK_QUESTION_NUMBER));
-            return backDoorLogic.getFeedbackQuestionAsJson(feedbackSessionName, courseId, qnNumber);
-        } else if (action.equals(OPERATION_GET_FEEDBACK_QUESTION_FOR_ID_AS_JSON)) {
-            String questionId = req.getParameter(PARAMETER_FEEDBACK_QUESTION_ID);
-            return backDoorLogic.getFeedbackQuestionForIdAsJson(questionId);
-        } else if (action.equals(OPERATION_DELETE_FEEDBACK_QUESTION)) {
+            break;
+        case OPERATION_DELETE_FEEDBACK_QUESTION:
             String questionId = req.getParameter(PARAMETER_FEEDBACK_QUESTION_ID);
             backDoorLogic.deleteFeedbackQuestion(questionId);
-        } else if (action.equals(OPERATION_GET_FEEDBACK_RESPONSE_AS_JSON)) {
+            break;
+        case OPERATION_DELETE_FEEDBACK_RESPONSE:
             String feedbackQuestionId = req.getParameter(PARAMETER_FEEDBACK_QUESTION_ID);
             String giverEmail = req.getParameter(PARAMETER_GIVER_EMAIL);
             String recipient = req.getParameter(PARAMETER_RECIPIENT);
-            return backDoorLogic.getFeedbackResponseAsJson(feedbackQuestionId, giverEmail, recipient);
-        } else if (action.equals(OPERATION_DELETE_FEEDBACK_RESPONSE)) {
-            String feedbackQuestionId = req.getParameter(PARAMETER_FEEDBACK_QUESTION_ID);
-            String giverEmail = req.getParameter(PARAMETER_GIVER_EMAIL);
-            String recipient = req.getParameter(PARAMETER_RECIPIENT);
-            FeedbackResponseAttributes fr = backDoorLogic.getFeedbackResponse(feedbackQuestionId, giverEmail, recipient);
+            FeedbackResponseAttributes fr =
+                    backDoorLogic.getFeedbackResponse(feedbackQuestionId, giverEmail, recipient);
             backDoorLogic.deleteFeedbackResponse(fr);
-        } else {
-            throw new InvalidParametersException("Unknown command: " + action);
+            break;
+        case OPERATION_DELETE_FEEDBACK_SESSION:
+            String feedbackSessionName = req.getParameter(PARAMETER_FEEDBACK_SESSION_NAME);
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            backDoorLogic.deleteFeedbackSession(feedbackSessionName, courseId);
+            break;
+        case OPERATION_DELETE_INSTRUCTOR:
+            String instructorEmail = req.getParameter(PARAMETER_INSTRUCTOR_EMAIL);
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            backDoorLogic.deleteInstructor(courseId, instructorEmail);
+            break;
+        case OPERATION_DELETE_STUDENT:
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            String studentEmail = req.getParameter(PARAMETER_STUDENT_EMAIL);
+            backDoorLogic.deleteStudent(courseId, studentEmail);
+            break;
+        case OPERATION_EDIT_FEEDBACK_QUESTION:
+            String newValues = req.getParameter(PARAMETER_JSON_STRING);
+            backDoorLogic.editFeedbackQuestionAsJson(newValues);
+            break;
+        case OPERATION_EDIT_FEEDBACK_SESSION:
+            newValues = req.getParameter(PARAMETER_JSON_STRING);
+            backDoorLogic.editFeedbackSessionAsJson(newValues);
+            break;
+        case OPERATION_EDIT_STUDENT:
+            studentEmail = req.getParameter(PARAMETER_STUDENT_EMAIL);
+            newValues = req.getParameter(PARAMETER_JSON_STRING);
+            backDoorLogic.editStudentAsJson(studentEmail, newValues);
+            break;
+        case OPERATION_EDIT_STUDENT_PROFILE_PICTURE:
+            String pictureDataString = req.getParameter(PARAMETER_PICTURE_DATA);
+            byte[] pictureData = Utils.getTeammatesGson().fromJson(pictureDataString, byte[].class);
+            googleId = req.getParameter(PARAMETER_GOOGLE_ID);
+            backDoorLogic.uploadAndUpdateStudentProfilePicture(googleId, pictureData);
+            break;
+        case OPERATION_GET_ACCOUNT_AS_JSON:
+            googleId = req.getParameter(PARAMETER_GOOGLE_ID);
+            return backDoorLogic.getAccountAsJson(googleId);
+        case OPERATION_GET_COURSE_AS_JSON:
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            return backDoorLogic.getCourseAsJson(courseId);
+        case OPERATION_GET_ENCRYPTED_KEY_FOR_INSTRUCTOR:
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            studentEmail = req.getParameter(PARAMETER_INSTRUCTOR_EMAIL);
+            return backDoorLogic.getEncryptedKeyForInstructor(courseId, studentEmail);
+        case OPERATION_GET_ENCRYPTED_KEY_FOR_STUDENT:
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            studentEmail = req.getParameter(PARAMETER_STUDENT_EMAIL);
+            return backDoorLogic.getEncryptedKeyForStudent(courseId, studentEmail);
+        case OPERATION_GET_FEEDBACK_QUESTION_AS_JSON:
+            feedbackSessionName = req.getParameter(PARAMETER_FEEDBACK_SESSION_NAME);
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            int qnNumber = Integer.parseInt(req.getParameter(PARAMETER_FEEDBACK_QUESTION_NUMBER));
+            return backDoorLogic.getFeedbackQuestionAsJson(feedbackSessionName, courseId, qnNumber);
+        case OPERATION_GET_FEEDBACK_QUESTION_FOR_ID_AS_JSON:
+            questionId = req.getParameter(PARAMETER_FEEDBACK_QUESTION_ID);
+            return backDoorLogic.getFeedbackQuestionForIdAsJson(questionId);
+        case OPERATION_GET_FEEDBACK_RESPONSE_AS_JSON:
+            feedbackQuestionId = req.getParameter(PARAMETER_FEEDBACK_QUESTION_ID);
+            giverEmail = req.getParameter(PARAMETER_GIVER_EMAIL);
+            recipient = req.getParameter(PARAMETER_RECIPIENT);
+            return backDoorLogic.getFeedbackResponseAsJson(feedbackQuestionId, giverEmail, recipient);
+        case OPERATION_GET_FEEDBACK_RESPONSES_FOR_GIVER_AS_JSON:
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            giverEmail = req.getParameter(PARAMETER_GIVER_EMAIL);
+            return backDoorLogic.getFeedbackResponsesForGiverAsJson(courseId, giverEmail);
+        case OPERATION_GET_FEEDBACK_RESPONSES_FOR_RECEIVER_AS_JSON:
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            recipient = req.getParameter(PARAMETER_RECIPIENT);
+            return backDoorLogic.getFeedbackResponsesForReceiverAsJson(courseId, recipient);
+        case OPERATION_GET_FEEDBACK_SESSION_AS_JSON:
+            feedbackSessionName = req.getParameter(PARAMETER_FEEDBACK_SESSION_NAME);
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            return backDoorLogic.getFeedbackSessionAsJson(feedbackSessionName, courseId);
+        case OPERATION_GET_INSTRUCTOR_AS_JSON_BY_ID:
+            String instructorId = req.getParameter(PARAMETER_INSTRUCTOR_ID);
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            return backDoorLogic.getInstructorAsJsonById(instructorId, courseId);
+        case OPERATION_GET_INSTRUCTOR_AS_JSON_BY_EMAIL:
+            instructorEmail = req.getParameter(PARAMETER_INSTRUCTOR_EMAIL);
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            return backDoorLogic.getInstructorAsJsonByEmail(instructorEmail, courseId);
+        case OPERATION_GET_STUDENT_AS_JSON:
+            courseId = req.getParameter(PARAMETER_COURSE_ID);
+            studentEmail = req.getParameter(PARAMETER_STUDENT_EMAIL);
+            return backDoorLogic.getStudentAsJson(courseId, studentEmail);
+        case OPERATION_GET_STUDENTPROFILE_AS_JSON:
+            googleId = req.getParameter(PARAMETER_GOOGLE_ID);
+            return backDoorLogic.getStudentProfileAsJson(googleId);
+        case OPERATION_IS_PICTURE_PRESENT_IN_GCS:
+            String pictureKey = req.getParameter(PARAMETER_PICTURE_KEY);
+            return String.valueOf(backDoorLogic.isPicturePresentInGcs(pictureKey));
+        case OPERATION_PERSIST_DATABUNDLE:
+            String dataBundleJsonString = req.getParameter(PARAMETER_DATABUNDLE_JSON);
+            DataBundle dataBundle = Utils.getTeammatesGson().fromJson(dataBundleJsonString, DataBundle.class);
+            backDoorLogic.persistDataBundle(dataBundle);
+            break;
+        case OPERATION_PUT_DOCUMENTS:
+            dataBundleJsonString = req.getParameter(PARAMETER_DATABUNDLE_JSON);
+            dataBundle = Utils.getTeammatesGson().fromJson(dataBundleJsonString, DataBundle.class);
+            backDoorLogic.putDocuments(dataBundle);
+            break;
+        case OPERATION_REMOVE_AND_RESTORE_DATABUNDLE:
+            dataBundleJsonString = req.getParameter(PARAMETER_DATABUNDLE_JSON);
+            dataBundle = Utils.getTeammatesGson().fromJson(dataBundleJsonString, DataBundle.class);
+            backDoorLogic.removeDataBundle(dataBundle);
+            backDoorLogic.persistDataBundle(dataBundle);
+            break;
+        case OPERATION_REMOVE_DATABUNDLE:
+            dataBundleJsonString = req.getParameter(PARAMETER_DATABUNDLE_JSON);
+            dataBundle = Utils.getTeammatesGson().fromJson(dataBundleJsonString, DataBundle.class);
+            backDoorLogic.removeDataBundle(dataBundle);
+            break;
         }
         return Const.StatusCodes.BACKDOOR_STATUS_SUCCESS;
     }
